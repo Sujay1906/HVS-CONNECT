@@ -165,9 +165,9 @@ def login_screen():
 
     tab1, tab2 = st.tabs(["👨‍👩‍👧 Parent Login", "🧑‍🏫 Faculty / Staff Login"])
     with tab1:
-        login_form("parent")
+        login_form("parent", allowed_roles=["PARENT"])
     with tab2:
-        login_form("staff")
+        login_form("staff", allowed_roles=["FACULTY", "DEAN", "ACCOUNTS", "WARDEN", "MESS", "DTP"])
 
     st.divider()
     st.caption("Staff without an account: use the QR code / registration link provided by administration.")
@@ -176,10 +176,10 @@ def login_screen():
 
 
 def dean_only_login():
-    login_form("dean_override")
+    login_form("dean_override", allowed_roles=["DEAN"])
 
 
-def login_form(key_prefix):
+def login_form(key_prefix, allowed_roles):
     stage = st.session_state.get(f"{key_prefix}_stage", "credentials")
 
     if stage == "credentials":
@@ -191,6 +191,12 @@ def login_form(key_prefix):
             user, error = auth.verify_password(hvs_id.strip(), password)
             if error:
                 st.error(error)
+            elif user["role"] not in allowed_roles:
+                # Correct HVS ID + password, but wrong login tab for this role.
+                # Rejected before any OTP is generated so wrong-tab attempts can't
+                # trigger an SMS or start a session.
+                st.error("This HVS ID does not have access through this login. "
+                         "Please use the correct login tab for your role.")
             else:
                 auth.start_otp_flow(user)
                 st.session_state[f"{key_prefix}_stage"] = "otp"
