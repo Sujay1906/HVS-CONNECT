@@ -5,6 +5,8 @@ Entry point. Run with: streamlit run app.py
 
 import streamlit as st
 import pandas as pd
+import base64
+from pathlib import Path
 from datetime import datetime
 
 import database as db
@@ -15,22 +17,125 @@ st.set_page_config(page_title="HVS Connect", page_icon="🏫", layout="wide")
 db.init_db()
 db.seed_demo_data()
 
+
+@st.cache_data
+def _load_background_base64():
+    """Campus photo, embedded as a data URI so it works on Streamlit Cloud
+    with no extra hosting. Cached so it's only read/encoded once per session."""
+    img_path = Path(__file__).parent / "assets" / "campus_bg.jpg"
+    if not img_path.exists():
+        return None
+    return base64.b64encode(img_path.read_bytes()).decode()
+
+
+_bg_b64 = _load_background_base64()
+_bg_css = (
+    f'linear-gradient(180deg, rgba(7,20,38,0.80) 0%, rgba(7,20,38,0.88) 55%, rgba(7,20,38,0.94) 100%), '
+    f'url("data:image/jpeg;base64,{_bg_b64}")'
+    if _bg_b64 else
+    'linear-gradient(180deg, #0b2545 0%, #123a6b 100%)'
+)
+
 # ----------------------------------------------------------------------
-# Global style
+# Global style — navy / gold / cream, matched to the HVS campus building
 # ----------------------------------------------------------------------
-st.markdown("""
+st.markdown(f"""
 <style>
-:root { --hvs-navy: #0b2545; --hvs-blue: #1b4b91; --hvs-light: #eaf1fb; }
-.hvs-header { background: var(--hvs-navy); padding: 18px 24px; border-radius: 10px;
-  color: white; margin-bottom: 18px; }
-.hvs-header h1 { margin: 0; font-size: 1.5rem; }
-.hvs-header p { margin: 0; opacity: 0.8; font-size: 0.85rem; }
-.badge { display:inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight:600;}
-.badge-pending { background:#fff3cd; color:#856404; }
-.badge-approved { background:#d4edda; color:#155724; }
-.badge-rejected { background:#f8d7da; color:#721c24; }
-.badge-paid { background:#d4edda; color:#155724; }
-.stMetric { background: var(--hvs-light); padding: 10px; border-radius: 8px; }
+:root {{
+    --hvs-navy: #0b2545;
+    --hvs-navy-light: #123a6b;
+    --hvs-gold: #c9a227;
+    --hvs-gold-light: #e7cf7a;
+    --hvs-cream: #f7f1e1;
+    --hvs-maroon: #7a2e2e;
+    --hvs-light: #eaf1fb;
+}}
+
+/* Campus photo as a fixed backdrop behind the whole app */
+.stApp {{
+    background: {_bg_css};
+    background-size: cover;
+    background-position: center 30%;
+    background-attachment: fixed;
+}}
+
+/* Content sits in a frosted card over the backdrop so tables/text stay readable */
+section.main > div.block-container {{
+    background: rgba(252, 249, 240, 0.94);
+    backdrop-filter: blur(6px);
+    border-radius: 18px;
+    padding: 2rem 2.4rem 2.6rem 2.4rem;
+    margin-top: 1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    border: 1px solid rgba(201,162,39,0.35);
+}}
+
+/* Sidebar — deep navy to match the sky in the photo */
+[data-testid="stSidebar"] {{
+    background: linear-gradient(180deg, var(--hvs-navy) 0%, var(--hvs-navy-light) 100%);
+    border-right: 2px solid var(--hvs-gold);
+}}
+[data-testid="stSidebar"] * {{ color: var(--hvs-cream) !important; }}
+[data-testid="stSidebar"] .stButton button {{
+    background: var(--hvs-gold);
+    color: var(--hvs-navy) !important;
+    border: none;
+    font-weight: 600;
+}}
+
+/* Header banner */
+.hvs-header {{
+    background: linear-gradient(120deg, var(--hvs-navy) 0%, var(--hvs-navy-light) 100%);
+    padding: 20px 26px;
+    border-radius: 14px;
+    color: var(--hvs-cream);
+    margin-bottom: 20px;
+    border: 1px solid var(--hvs-gold);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+}}
+.hvs-header h1 {{ margin: 0; font-size: 1.6rem; color: var(--hvs-cream); letter-spacing: 0.3px; }}
+.hvs-header p {{ margin: 4px 0 0 0; opacity: 0.9; font-size: 0.88rem; color: var(--hvs-gold-light); }}
+
+/* Status badges */
+.badge {{ display:inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight:600; }}
+.badge-pending {{ background:#fff3cd; color:#856404; }}
+.badge-approved {{ background:#d4edda; color:#155724; }}
+.badge-rejected {{ background:#f8d7da; color:#721c24; }}
+.badge-paid {{ background:#d4edda; color:#155724; }}
+
+/* Metrics */
+[data-testid="stMetric"] {{
+    background: var(--hvs-cream);
+    border: 1px solid rgba(201,162,39,0.4);
+    border-left: 4px solid var(--hvs-gold);
+    padding: 12px 14px;
+    border-radius: 10px;
+}}
+
+/* Bordered containers (leave/fee request cards) */
+[data-testid="stVerticalBlockBorderWrapper"] {{
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid rgba(201,162,39,0.35) !important;
+}}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {{ border-bottom: 2px solid rgba(201,162,39,0.35); }}
+.stTabs [aria-selected="true"] {{ color: var(--hvs-maroon) !important; font-weight: 700; }}
+.stTabs [data-baseweb="tab-highlight"] {{ background-color: var(--hvs-gold) !important; }}
+
+/* Primary buttons */
+.stButton > button[kind="primary"], .stFormSubmitButton > button {{
+    background: var(--hvs-gold);
+    color: var(--hvs-navy);
+    border: none;
+    font-weight: 600;
+}}
+.stButton > button[kind="primary"]:hover, .stFormSubmitButton > button:hover {{
+    background: var(--hvs-gold-light);
+    color: var(--hvs-navy);
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -152,15 +257,21 @@ def registration_form():
 # ----------------------------------------------------------------------
 def app_shell():
     user = auth.current_user()
+    subtitle = f"{user['full_name']}"
+    if user.get("designation"):
+        subtitle += f" · {user['designation']}"
+    subtitle += f" · {user['hvs_id']}"
     st.markdown(f"""
     <div class="hvs-header">
         <h1>🏫 HVS Connect</h1>
-        <p>{user['full_name']} · {user['hvs_id']} · {user['role']}</p>
+        <p>{subtitle}</p>
     </div>
     """, unsafe_allow_html=True)
 
     with st.sidebar:
         st.markdown(f"**{user['full_name']}**")
+        if user.get("designation"):
+            st.caption(user["designation"])
         st.caption(f"{user['hvs_id']} — {user['role']}")
         if st.button("Log out"):
             auth.logout()
@@ -243,6 +354,39 @@ def dean_dashboard(user):
                         conn.commit()
                         db.add_notification(r["parent_hvs_id"], f"Leave request {r['leave_id']} rejected.")
                         db.log_audit(user["hvs_id"], "LEAVE_REJECTED", r["leave_id"])
+                        st.rerun()
+
+        st.divider()
+        st.subheader("Staff Leave Requests")
+        staff_rows = conn.execute("""
+            SELECT sl.*, u.full_name, u.designation FROM staff_leave_requests sl
+            JOIN users u ON u.hvs_id = sl.hvs_id
+            ORDER BY sl.created_at DESC
+        """).fetchall()
+        if not staff_rows:
+            st.caption("No staff leave requests yet.")
+        for r in staff_rows:
+            with st.container(border=True):
+                col1, col2 = st.columns([4, 1])
+                title = r["full_name"] + (f" · {r['designation']}" if r["designation"] else "")
+                col1.markdown(f"**{r['leave_id']}** — {title}  \n{r['leave_type']}  \n"
+                              f"{r['from_date']} to {r['to_date']}  \n*{r['reason']}*")
+                col1.markdown(badge(r['status']), unsafe_allow_html=True)
+                if r["status"] == "PENDING":
+                    a1, a2 = col2.columns(2)
+                    if a1.button("Approve", key=f"sappr_{r['leave_id']}"):
+                        conn.execute("UPDATE staff_leave_requests SET status='APPROVED', decided_by=?, "
+                                     "decided_at=? WHERE leave_id=?", (user["hvs_id"], db.now(), r["leave_id"]))
+                        conn.commit()
+                        db.add_notification(r["hvs_id"], f"Leave request {r['leave_id']} approved.")
+                        db.log_audit(user["hvs_id"], "STAFF_LEAVE_APPROVED", r["leave_id"])
+                        st.rerun()
+                    if a2.button("Reject", key=f"srej_{r['leave_id']}"):
+                        conn.execute("UPDATE staff_leave_requests SET status='REJECTED', decided_by=?, "
+                                     "decided_at=? WHERE leave_id=?", (user["hvs_id"], db.now(), r["leave_id"]))
+                        conn.commit()
+                        db.add_notification(r["hvs_id"], f"Leave request {r['leave_id']} rejected.")
+                        db.log_audit(user["hvs_id"], "STAFF_LEAVE_REJECTED", r["leave_id"])
                         st.rerun()
 
     with tabs[2]:
@@ -502,45 +646,127 @@ def parent_dashboard(user):
 # ----------------------------------------------------------------------
 def faculty_dashboard(user):
     conn = db.get_conn()
-    tabs = st.tabs(["My Classes", "Mark Attendance", "Attendance History", "Notices"])
+    tabs = st.tabs(["My Classes", "Mark Attendance", "Attendance History", "Apply Leave",
+                    "Notices", "My Profile"])
 
-    students = conn.execute("SELECT * FROM students").fetchall()
+    my_classes = conn.execute(
+        "SELECT * FROM class_assignments WHERE faculty_hvs_id=? ORDER BY class_name, section",
+        (user["hvs_id"],),
+    ).fetchall()
 
     with tabs[0]:
-        st.dataframe(pd.DataFrame([dict(r) for r in students]), use_container_width=True, hide_index=True)
+        st.subheader("My Classes")
+        if my_classes:
+            df = pd.DataFrame([
+                {"Class": c["class_name"], "Section": c["section"], "Subject": c["subject"],
+                 "Timing": c["timing"]}
+                for c in my_classes
+            ])
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No classes assigned yet.")
 
     with tabs[1]:
         st.subheader("Mark Attendance")
-        classes = sorted(set(s["class_name"] for s in students))
-        selected_class = st.selectbox("Class", classes)
-        subject = st.text_input("Subject", value="General")
-        date = st.date_input("Date", value=datetime.now())
-        class_students = [s for s in students if s["class_name"] == selected_class]
-        statuses = {}
-        for s in class_students:
-            statuses[s["student_id"]] = st.radio(s["name"], ["PRESENT", "ABSENT"], horizontal=True,
-                                                 key=f"att_{s['student_id']}_{date}")
-        if st.button("Submit Attendance"):
-            for sid, status in statuses.items():
-                conn.execute("INSERT INTO attendance (student_id, date, subject, status, marked_by) "
-                           "VALUES (?,?,?,?,?)", (sid, str(date), subject, status, user["hvs_id"]))
-            conn.commit()
-            db.log_audit(user["hvs_id"], "ATTENDANCE_MARKED", f"{selected_class} / {subject} / {date}")
-            st.success("Attendance submitted.")
+        if not my_classes:
+            st.warning("No classes are assigned to you yet — contact the Dean's office.")
+        else:
+            options = {
+                f"{c['class_name']} - {c['section']} ({c['subject']}, {c['timing']})":
+                    (c["class_name"], c["section"], c["subject"])
+                for c in my_classes
+            }
+            label = st.selectbox("Class", list(options.keys()))
+            selected_class, selected_section, selected_subject = options[label]
+            date = st.date_input("Date", value=datetime.now())
+
+            class_students = conn.execute(
+                "SELECT * FROM students WHERE class_name=? AND section=? ORDER BY name",
+                (selected_class, selected_section),
+            ).fetchall()
+
+            if not class_students:
+                st.info("No students found in this class/section yet.")
+            else:
+                statuses = {}
+                for s in class_students:
+                    statuses[s["student_id"]] = st.radio(
+                        f"{s['name']} ({s['student_id']})", ["PRESENT", "ABSENT"], horizontal=True,
+                        key=f"att_{s['student_id']}_{date}_{selected_subject}",
+                    )
+                if st.button("Submit Attendance"):
+                    for sid, status in statuses.items():
+                        conn.execute(
+                            "INSERT INTO attendance (student_id, date, subject, status, marked_by) "
+                            "VALUES (?,?,?,?,?)", (sid, str(date), selected_subject, status, user["hvs_id"]),
+                        )
+                    conn.commit()
+                    db.log_audit(user["hvs_id"], "ATTENDANCE_MARKED",
+                                 f"{selected_class}-{selected_section} / {selected_subject} / {date}")
+                    st.success("Attendance submitted.")
 
     with tabs[2]:
         att = conn.execute("""
-            SELECT s.name, a.date, a.subject, a.status FROM attendance a
+            SELECT s.name, s.student_id, a.date, a.subject, a.status FROM attendance a
             JOIN students s ON s.student_id = a.student_id
             ORDER BY a.date DESC LIMIT 100
         """).fetchall()
         st.dataframe(pd.DataFrame([dict(r) for r in att]), use_container_width=True, hide_index=True)
 
     with tabs[3]:
+        st.subheader("My Leave Requests")
+        my_leaves = conn.execute(
+            "SELECT * FROM staff_leave_requests WHERE hvs_id=? ORDER BY created_at DESC",
+            (user["hvs_id"],),
+        ).fetchall()
+        if my_leaves:
+            for l in my_leaves:
+                st.markdown(
+                    f"**{l['leave_id']}** — {l['leave_type']} · {l['from_date']} to {l['to_date']} "
+                    f"{badge(l['status'])}",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("No leave requests yet.")
+
+        st.divider()
+        st.subheader("Apply for Leave")
+        with st.form("faculty_apply_leave"):
+            leave_type = st.selectbox("Leave Type", ["Casual", "Medical", "Personal", "Other"])
+            c1, c2 = st.columns(2)
+            from_date = c1.date_input("From Date", key="fac_from")
+            to_date = c2.date_input("To Date", key="fac_to")
+            reason = st.text_area("Reason")
+            submit = st.form_submit_button("Submit Leave Request")
+        if submit:
+            leave_id = db.new_id("HVS-SLV")
+            conn.execute(
+                "INSERT INTO staff_leave_requests (leave_id, hvs_id, leave_type, from_date, to_date, "
+                "reason, status, created_at) VALUES (?,?,?,?,?,?, 'PENDING', ?)",
+                (leave_id, user["hvs_id"], leave_type, str(from_date), str(to_date), reason, db.now()),
+            )
+            conn.commit()
+            db.log_audit(user["hvs_id"], "STAFF_LEAVE_SUBMITTED", leave_id)
+            st.success(f"Leave request submitted: {leave_id}")
+            st.rerun()
+
+    with tabs[4]:
         notices = conn.execute("SELECT * FROM notices WHERE audience IN ('ALL','FACULTY','STAFF') "
                                "ORDER BY id DESC").fetchall()
-        for n in notices:
-            st.info(f"**{n['title']}**  \n{n['message']}")
+        if notices:
+            for n in notices:
+                st.info(f"**{n['title']}**  \n{n['message']}")
+        else:
+            st.caption("No notices yet.")
+
+    with tabs[5]:
+        st.subheader(user["full_name"])
+        if user.get("designation"):
+            st.write(f"**Designation:** {user['designation']}")
+        st.write(f"**HVS ID:** {user['hvs_id']}")
+        st.write(f"**Mobile:** {user.get('mobile') or '—'}")
+        assigned_classes = sorted({f"{c['class_name']} - {c['section']}" for c in my_classes})
+        st.write(f"**Classes assigned:** {', '.join(assigned_classes) if assigned_classes else '—'}")
 
     conn.close()
 
